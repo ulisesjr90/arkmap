@@ -1,4 +1,2 @@
-﻿export * from './AppointmentModal';
-export * from './DeleteConfirmModal';
-
-
+﻿export { AppointmentModal } from './AppointmentModal';
+export { DeleteConfirmModal } from './DeleteConfirmModal';

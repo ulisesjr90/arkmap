@@ -40,6 +40,7 @@ const MapTools: React.FC<MapToolsProps> = ({
       className={`absolute left-0 top-20 z-10 transition-transform duration-300 ${
         isVisible ? 'translate-x-0' : '-translate-x-full'
       }`}
+      style={{ maxWidth: '90vw' }} // Limits the width for smaller screens
     >
       {/* Toggle Button */}
       <button 
@@ -50,7 +51,7 @@ const MapTools: React.FC<MapToolsProps> = ({
       </button>
 
       {/* Tools Panel */}
-      <div className="bg-gray-800 p-4 rounded-r-lg shadow-lg w-64">
+      <div className="bg-gray-800 p-4 rounded-r-lg shadow-lg w-full max-w-xs sm:max-w-sm">
         <h3 className="text-sm font-medium mb-4">Route Planning Tools</h3>
         
         {/* Drawing Tool */}
@@ -69,7 +70,7 @@ const MapTools: React.FC<MapToolsProps> = ({
 
           {/* Routes List */}
           {routes.length > 0 && (
-            <div className="space-y-2">
+            <div className="space-y-2 overflow-y-auto max-h-[50vh]">
               <h4 className="text-xs text-gray-400">Saved Routes</h4>
               {routes.map(route => (
                 <div 

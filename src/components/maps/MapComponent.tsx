@@ -274,3 +274,4 @@ const MapComponent: React.FC<MapComponentProps> = ({ view, dateFilter }) => {
 
 export default MapComponent;
 
+

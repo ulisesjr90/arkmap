@@ -50,21 +50,22 @@ const HeatmapLayer: React.FC<HeatmapLayerProps> = ({ map, leads, dateFilter, vis
         'rgba(63, 0, 91, 1)',
         'rgba(127, 0, 63, 1)',
         'rgba(191, 0, 31, 1)',
-        'rgba(255, 0, 0, 1)'
-      ]
+        'rgba(255, 0, 0, 1)',
+      ],
     });
 
     setHeatmap(heatmapInstance);
 
     return () => {
-      heatmnstance.setMap(null);
+      if (heatmapInstance) {
+        heatmapInstance.setMap(null); // Corrected from "heatmnstance"
+      }
     };
   }, [map]);
 
   // Process leads into heatmap data
-  const processLeads = (leads: Lead[]) => {
-    // Get date range based on filter
-    const getDateRange = () => {
+  const processLeads = (leads: Lead[]): HeatmapData[] => {
+    const getDateRange = (): Date => {
       const now = new Date();
       switch (dateFilter) {
         case 'today':
@@ -74,8 +75,7 @@ const HeatmapLayer: React.FC<HeatmapLayerProps> = ({ map, leads, dateFilter, vis
         case 'month':
           return new Date(now.setMonth(now.getMonth() - 1));
         case 'custom':
-          // Handle custom date range
-          return new Date(0); // Temporary
+          return new Date(0); // Adjust as needed for custom ranges
         default:
           return new Date(0);
       }
@@ -83,43 +83,25 @@ const HeatmapLayer: React.FC<HeatmapLayerProps> = ({ map, leads, dateFilter, vis
 
     const startDate = getDateRange();
 
-    // Filter and process leads
-    const filteredLeads = leads.filter(lead => {
-      const leadDate = new Date(lead.dateCreated);
-      return leadDate >= startDate;
-    });
-
-    // Group leads by location and calculate weights
     const locationMap = new Map<string, HeatmapData>();
 
-    filteredLeads.forEach(lead => {
-      const key = `${lead.location.lat},${lead.location.lng}`;
-      const existingData = locationMap.get(key);
+    leads
+      .filter((lead) => new Date(lead.dateCreated) >= startDate)
+      .forEach((lead) => {
+        const key = `${lead.location.lat},${lead.location.lng}`;
+        const existingData = locationMap.get(key);
+        const statusWeight = lead.status === 'New Lead' ? 3 : lead.status === 'Contact Needed' ? 2 : 1;
 
-      // Calculate weight based on status
-      let statusWeight = 1;
-      switch (lead.status) {
-        case 'New Lead':
-          statusWeight = 3;
-          break;
-        case 'Contact Needed':
-          statusWeight = 2;
-          break;
-        case 'No Answer':
-          statusWeight = 1;
-          break;
-      }
-
-      if (existingData) {
-        existingData.weight += statusWeight;
-      } else {
-        locationMap.set(key, {
-          lat: lead.location.lat,
-          lng: lead.location.lng,
-          weight: statusWeight
-        });
-      }
-    });
+        if (existingData) {
+          existingData.weight += statusWeight;
+        } else {
+          locationMap.set(key, {
+            lat: lead.location.lat,
+            lng: lead.location.lng,
+            weight: statusWeight,
+          });
+        }
+      });
 
     return Array.from(locationMap.values());
   };
@@ -131,10 +113,13 @@ const HeatmapLayer: React.FC<HeatmapLayerProps> = ({ map, leads, dateFilter, vis
     const newData = processLeads(leads);
     setHeatmapData(newData);
 
-    const heatmapPoints = newData.map(point => ({
-      location: new google.maps.LatLng(point.lat, point.lng),
-      weight: point.weight
-    }));
+    const heatmapPoints = newData.map(
+      (point) =>
+        new google.maps.visualization.WeightedLocation({
+          location: new google.maps.LatLng(point.lat, point.lng),
+          weight: point.weight,
+        })
+    );
 
     heatmap.setData(heatmapPoints);
   }, [leads, dateFilter, heatmap]);

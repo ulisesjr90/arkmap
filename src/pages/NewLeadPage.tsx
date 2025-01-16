@@ -1,384 +1,218 @@
 ﻿import React, { useState } from 'react';
-import { ChevronLeft, Camera, MapPin } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { collection, addDoc } from "firebase/firestore";
-import { db } from "../config/firestore"; 
-import { useAuth } from '../contexts/AuthContext';
+import { ChevronLeft } from 'lucide-react';
+import { useLeads } from '../hooks/useLeads';
+import VehicleInformation from '../components/newLead/sections/VehicleInformation';
+import CustomerInformation from '../components/newLead/sections/CustomerInformation';
+import InsuranceInformation from '../components/newLead/sections/InsuranceInformation';
+import LeadInformation from '../components/newLead/sections/LeadInformation';
+import AppointmentInformation from '../components/newLead/sections/AppointmentInformation';
 
-interface NewLeadForm {
-  vehicle: {
-    year: string;
-    make: string;
-    model: string;
-    trim: string;
-    color: string;
-    vin: string;
-    plate: string;
-  };
-  customer: {
-    name: string;
-    phone: string;
-    email: string;
-    address: string;
-  };
-  insurance: {
-    carrier: string;
-    policyNumber: string;
-    deductible: string;
-    rentalCoverage: boolean;
-  };
-  appointment: {
-    create: boolean; 
-    date: string;
-    type: string;
-    status: string;
-    notes: string;
-  };
-  leadInfo: {
-    status: string;
-    priority: string;
-    source: string;
-  };
-}
-
-const NewLeadPage: React.FC = () => {
+const NewLeadPage = () => {
   const navigate = useNavigate();
-  const { user } = useAuth(); 
-  const [formData, setFormData] = useState<NewLeadForm>({
+  const { addLead } = useLeads();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  const [formData, setFormData] = useState({
     vehicle: {
       year: '',
       make: '',
       model: '',
       trim: '',
       color: '',
-      vin: '',
       plate: '',
+      vin: ''
     },
     customer: {
       name: '',
       phone: '',
       email: '',
-      address: '',
+      address: ''
     },
     insurance: {
       carrier: '',
       policyNumber: '',
       deductible: '',
-      rentalCoverage: false,
-    },
-    appointment: {
-      date: '',
-      type: 'Initial Consultation',
-      status: 'Scheduled',
-      notes: '',
+      rentalCoverage: false
     },
     leadInfo: {
       status: 'New',
-      priority: 'None',
-      source: 'Door Knock',
+      priority: 'Low',
+      source: 'Door Knock'
     },
+    appointment: {
+      create: false,
+      date: '',
+      type: 'Initial Consultation',
+      notes: ''
+    }
   });
 
-  const handleChange = (section: keyof NewLeadForm, field: string, value: any) => {
-    setFormData((prev) => ({
+  const [suggestions, setSuggestions] = useState({
+    make: [],
+    model: [],
+    trim: [],
+    color: [],
+    carrier: []
+  });
+
+  const handleChange = (section: string, field: string, value: any) => {
+    setFormData(prev => ({
       ...prev,
       [section]: {
         ...prev[section],
-        [field]: value,
-      },
+        [field]: value
+      }
     }));
+  };
+
+  const handleCurrentLocation = async () => {
+    try {
+      const position = await getCurrentPosition();
+      const { latitude, longitude } = position.coords;
+      
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=AIzaSyBbVGXiDjNsA74RmR-gIjHOia43l7SHHmk`
+      );
+      
+      const data = await response.json();
+      if (data.results[0]) {
+        handleChange('customer', 'address', data.results[0].formatted_address);
+      }
+    } catch (error) {
+      console.error('Error getting location:', error);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) {
-      console.error('No authenticated user.');
+    
+    if (!formData.customer.name && !formData.vehicle.make) {
+      setError('Please fill in either customer name or vehicle make');
       return;
     }
+
+    setIsSubmitting(true);
+    setError(null);
 
     try {
-      const createdAt = new Date();
       const leadData = {
         ...formData,
-        ownerId: user.uid, 
-        createdAt,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        appointments: formData.appointment.create ? [{
+          id: Date.now().toString(),
+          date: new Date(formData.appointment.date).toISOString(),
+          type: formData.appointment.type,
+          status: 'Scheduled',
+          notes: formData.appointment.notes
+        }] : [],
+        activity: [{
+          id: Date.now().toString(),
+          type: 'contact',
+          method: 'Visit',
+          date: new Date().toISOString(),
+          user: 'Current User',
+          notes: 'Lead created',
+          outcome: 'Successful'
+        }],
+        updates: []
       };
-  
-      await addDoc(collection(db, "leads"), leadData);
-  
-      console.log("Lead saved successfully");
-      navigate("/leads");  
-    } catch (error) {
-      console.error("Error saving lead:", error);
-    }
-  };  
 
-  const useCurrentLocation = async () => {
-    if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser.");
-      return;
+      await addLead(leadData);
+      navigate('/leads');
+    } catch (error) {
+      console.error('Error creating lead:', error);
+      setError('Failed to create lead. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
-  
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-  
-        try {
-          const apiKey = "AIzaSyBbVGXiDjNsA74RmR-gIjHOia43l7SHHmk";
-          const response = await fetch(
-            `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${apiKey}`
-          );
-  
-          const data = await response.json();
-  
-          if (data.status === "OK" && data.results.length > 0) {
-            const address = data.results[0].formatted_address;
-            console.log(`Address: ${address}`);
-  
-            // Update the address field in the form
-            handleChange("customer", "address", address);
-          } else {
-            console.error("Failed to get address:", data);
-            alert("Could not fetch the address. Please try again.");
-          }
-        } catch (error) {
-          console.error("Error fetching address:", error);
-          alert("An error occurred while fetching the address.");
-        }
-      },
-      (error) => {
-        console.error("Error fetching location:", error);
-        alert("Unable to fetch location. Please check your settings.");
-      }
-    );
   };
-  
+
+  const getCurrentPosition = (): Promise<GeolocationPosition> => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('Geolocation is not supported'));
+        return;
+      }
+      
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 0
+      });
+    });
+  };
 
   return (
-    <div className="h-full bg-gray-900 text-white flex flex-col">
+    <div className="h-full flex flex-col bg-gray-900 text-white">
       {/* Header */}
-      <div className="bg-gray-800 px-4 py-3 flex items-center gap-4">
-        <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-white">
-          <ChevronLeft className="w-6 h-6" />
-        </button>
-        <div className="text-lg">New Lead</div>
+      <div className="bg-gray-800 px-4 py-3 flex items-center justify-between sticky top-0 z-10 shadow-lg">
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => navigate(-1)} 
+            className="text-gray-400 hover:text-white transition-colors"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <div className="text-lg font-medium">New Lead</div>
+        </div>
+
+        <div className="flex-1 flex justify-end max-w-[160px]">
+          <button
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed w-full"
+          >
+            {isSubmitting ? 'Saving...' : 'Save'}
+          </button>
+        </div>
       </div>
 
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-500/10 text-red-400 px-4 py-3 text-sm">
+          {error}
+        </div>
+      )}
+
       {/* Form */}
-      <form onSubmit={handleSubmit} className="flex-1 overflow-auto p-4 space-y-6">
-        {/* Vehicle Information */}
-        <div className="bg-gray-800 rounded-lg p-4 space-y-4">
-          <div className="text-sm text-gray-400">Vehicle Information</div>
-          <div className="grid grid-cols-2 gap-3">
-            <input
-              type="text"
-              placeholder="Year"
-              value={formData.vehicle.year}
-              onChange={(e) => handleChange('vehicle', 'year', e.target.value)}
-              className="bg-gray-700 rounded-lg px-3 py-2 text-sm placeholder-gray-500"
-            />
-            <input
-              type="text"
-              placeholder="Make"
-              value={formData.vehicle.make}
-              onChange={(e) => handleChange('vehicle', 'make', e.target.value)}
-              className="bg-gray-700 rounded-lg px-3 py-2 text-sm placeholder-gray-500"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <input
-              type="text"
-              placeholder="Model"
-              value={formData.vehicle.model}
-              onChange={(e) => handleChange('vehicle', 'model', e.target.value)}
-              className="bg-gray-700 rounded-lg px-3 py-2 text-sm placeholder-gray-500"
-            />
-            <input
-              type="text"
-              placeholder="Trim"
-              value={formData.vehicle.trim}
-              onChange={(e) => handleChange('vehicle', 'trim', e.target.value)}
-              className="bg-gray-700 rounded-lg px-3 py-2 text-sm placeholder-gray-500"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <input
-              type="text"
-              placeholder="Color"
-              value={formData.vehicle.color}
-              onChange={(e) => handleChange('vehicle', 'color', e.target.value)}
-              className="bg-gray-700 rounded-lg px-3 py-2 text-sm placeholder-gray-500"
-            />
-            <input
-              type="text"
-              placeholder="License Plate"
-              value={formData.vehicle.plate}
-              onChange={(e) => handleChange('vehicle', 'plate', e.target.value)}
-              className="bg-gray-700 rounded-lg px-3 py-2 text-sm placeholder-gray-500"
-            />
-          </div>
-          <input
-            type="text"
-            placeholder="VIN"
-            value={formData.vehicle.vin}
-            onChange={(e) => handleChange('vehicle', 'vin', e.target.value)}
-            className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm placeholder-gray-500"
+      <div className="flex-1 overflow-auto">
+        <form onSubmit={handleSubmit} className="p-4 space-y-6 max-w-2xl mx-auto pb-20">
+          <VehicleInformation
+            formData={formData}
+            handleChange={handleChange}
+            suggestions={suggestions}
+            onSuggestionSelect={(section, field, value) => handleChange(section, field, value)}
           />
-        </div>
 
-               {/* Customer Information */}
-               <div className="bg-gray-800 rounded-lg p-4 space-y-4">
-               <div className="text-sm text-gray-400">Customer Information</div>
-               <input
-                 type="text"
-                 placeholder="Full Name"
-                 value={formData.customer.name}
-                 onChange={(e) => handleChange('customer', 'name', e.target.value)}
-                 className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm placeholder-gray-500"
-               />
-               <input
-                 type="tel"
-                 placeholder="Phone Number"
-                 value={formData.customer.phone}
-                 onChange={(e) => handleChange('customer', 'phone', e.target.value)}
-                 className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm placeholder-gray-500"
-               />
-               <input
-                 type="email"
-                 placeholder="Email"
-                 value={formData.customer.email}
-                 onChange={(e) => handleChange('customer', 'email', e.target.value)}
-                 className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm placeholder-gray-500"
-               />
-               <button
-                 type="button"
-                 onClick={useCurrentLocation}
-                 className="bg-blue-500 text-white rounded-lg px-3 py-2"
-               >
-                 Use Current Location
-               </button>
-               <input
-                 type="text"
-                 placeholder="Address"
-                 value={formData.customer.address}
-                 onChange={(e) => handleChange('customer', 'address', e.target.value)}
-                 className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm placeholder-gray-500"
-               />
-             </div>
-     
-        {/* Lead Information */}
-        <div className="bg-gray-800 rounded-lg p-4 space-y-4">
-          <div className="text-sm text-gray-400">Lead Information</div>
-          <select
-            value={formData.leadInfo.status}
-            onChange={(e) => handleChange('leadInfo', 'status', e.target.value)}
-            className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm text-white"
-          >
-            <option>New</option>
-            <option>No Answer</option>
-            <option>Needs Contact</option>
-            <option>Appointment</option>
-            <option>Closed</option>
-            <option>Service Needed</option>
-            <option>Not Interested</option>
-          </select>
-          <select
-            value={formData.leadInfo.priority}
-            onChange={(e) => handleChange('leadInfo', 'priority', e.target.value)}
-            className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm text-white"
-          >
-            <option>High</option>
-            <option>Low</option>
-            <option>None</option>
-          </select>
-          <select
-            value={formData.leadInfo.source}
-            onChange={(e) => handleChange('leadInfo', 'source', e.target.value)}
-            className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm text-white"
-          >
-            <option>Door Knock</option>
-            <option>Referral</option>
-            <option>Website</option>
-            <option>Call In</option>
-            <option>Other</option>
-          </select>
-        </div>
-
-        {/* Insurance Information */}
-        <div className="bg-gray-800 rounded-lg p-4 space-y-4">
-          <div className="text-sm text-gray-400">Insurance Information</div>
-          <input
-            type="text"
-            placeholder="Insurance Carrier"
-            value={formData.insurance.carrier}
-            onChange={(e) => handleChange('insurance', 'carrier', e.target.value)}
-            className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm placeholder-gray-500"
+          <CustomerInformation
+            formData={formData}
+            handleChange={handleChange}
+            useCurrentLocation={handleCurrentLocation}
           />
-          <input
-            type="text"
-            placeholder="Policy Number"
-            value={formData.insurance.policyNumber}
-            onChange={(e) => handleChange('insurance', 'policyNumber', e.target.value)}
-            className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm placeholder-gray-500"
-          />
-          <input
-            type="text"
-            placeholder="Deductible Amount"
-            value={formData.insurance.deductible}
-            onChange={(e) => handleChange('insurance', 'deductible', e.target.value)}
-            className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm placeholder-gray-500"
-          />
-          <label className="flex items-center gap-2 text-sm text-gray-400">
-            <input
-              type="checkbox"
-              checked={formData.insurance.rentalCoverage}
-              onChange={(e) => handleChange('insurance', 'rentalCoverage', e.target.checked)}
-              className="text-blue-500"
-            />
-            Rental Coverage
-          </label>
-        </div>
 
-             {/* Appointment Information */}
-             <div className="bg-gray-800 rounded-lg p-4 space-y-4">
-               <label className="flex items-center gap-2 text-sm text-gray-400">
-                 <input
-                   type="checkbox"
-                   checked={formData.appointment.create}
-                   onChange={(e) => handleChange('appointment', 'create', e.target.checked)}
-                   className="text-blue-500"
-                 />
-                 Create Appointment
-               </label>
-               {formData.appointment.create && (
-                 <>
-                   <input
-                     type="date"
-                     value={formData.appointment.date}
-                     onChange={(e) => handleChange('appointment', 'date', e.target.value)}
-                     className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm placeholder-gray-500"
-                   />
-                   <textarea
-                     placeholder="Notes"
-                     value={formData.appointment.notes}
-                     onChange={(e) => handleChange('appointment', 'notes', e.target.value)}
-                     className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm placeholder-gray-500"
-                   ></textarea>
-                 </>
-               )}
-             </div>
+          <InsuranceInformation
+            formData={formData}
+            handleChange={handleChange}
+            suggestions={suggestions}
+            onSuggestionSelect={(section, field, value) => handleChange(section, field, value)}
+          />
 
-        <button
-          type="submit"
-          className="w-auto bg-blue-500 text-white rounded-lg px-4 py-2 hover:bg-blue-600 mx-auto"
-        >
-          Save
-        </button>
-      </form>
+          <LeadInformation
+            formData={formData}
+            handleChange={handleChange}
+          />
+
+          <AppointmentInformation
+            formData={formData}
+            handleChange={handleChange}
+          />
+        </form>
+      </div>
     </div>
   );
 };
 
 export default NewLeadPage;
-

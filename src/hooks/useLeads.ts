@@ -9,6 +9,7 @@ import {
   updateDoc,
   deleteDoc,
   doc,
+  getDoc,
   Timestamp,
 } from 'firebase/firestore';
 import { db, Lead } from '../config/firestore';
@@ -48,6 +49,20 @@ export const useLeads = () => {
 
     return () => unsubscribe();
   }, [user]);
+
+  const getLead = async (leadId: string) => {
+    try {
+      const leadRef = doc(db, 'leads', leadId);
+      const leadSnap = await getDoc(leadRef);
+      if (!leadSnap.exists()) {
+        throw new Error('Lead not found');
+      }
+      return { id: leadSnap.id, ...leadSnap.data() };
+    } catch (err) {
+      console.error('Error fetching lead:', err);
+      throw err;
+    }
+  };
 
   const addLead = async (
     leadData: Omit<Lead, 'id' | 'createdAt' | 'updatedAt' | 'ownerId'>
@@ -96,6 +111,7 @@ export const useLeads = () => {
     leads,
     loading,
     error,
+    getLead,
     addLead,
     updateLead,
     deleteLead,

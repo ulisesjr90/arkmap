@@ -20,7 +20,6 @@ const TopBar: React.FC<TopBarProps> = ({
           ARK MAP
         </div>
       )}
-      
       {showSettingsIcon && (
         <button
           onClick={() => navigate('/settings')}
@@ -34,4 +33,3 @@ const TopBar: React.FC<TopBarProps> = ({
 };
 
 export default TopBar;
-

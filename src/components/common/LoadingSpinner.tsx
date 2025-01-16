@@ -22,3 +22,4 @@ export const LoadingSpinner = ({ size = 'medium', center = true }: LoadingSpinne
 };
 
 export default LoadingSpinner;
+

@@ -40,3 +40,31 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Style the scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #4b5563; /* Gray-700 */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #374151; /* Gray-800 */
+}
+
+::-webkit-scrollbar-track {
+  background-color: #1f2937; /* Gray-900 */
+}
+
+/* Hide scrollbar but allow scrolling */
+::-webkit-scrollbar {
+  display: none; /* For Chrome, Safari, and Opera */
+}
+
+html {
+  scrollbar-width: none; /* For Firefox */
+  -ms-overflow-style: none; /* For IE and Edge */
+}
